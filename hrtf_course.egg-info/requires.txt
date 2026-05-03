@@ -1,0 +1,10 @@
+numpy
+scipy
+matplotlib
+pandas
+slab
+hrtf_relearning
+scikit-learn
+
+[dev]
+pytest

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hrtf_course"
+version = "0.1.0"
+description = "Teaching layer over hrtf_relearning for the practical psychoacoustics course."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Paul Friedrich" }]
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pandas",
+    "slab",
+    # hrtf_course vendors the small DSP / VSI / plot helpers it needs from
+    # hrtf_relearning (see _dsp_primitives.py, vsi.py, _plot.py).  No hard
+    # dep on the research package — students just `uv sync` and go.
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+# Extras for the rig machine: the research package provides Localization,
+# the Subject pickle loader, and the Baumgartner model.  Install with
+# `uv sync --extra rig` from a checkout that has hrtf_relearning as a
+# sibling, or `uv pip install -e ../hrtf_relearning`.
+rig = ["hrtf_relearning"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["hrtf_course*"]
+
+# Path source for the rig extra — uv resolves hrtf_relearning from the
+# sibling checkout when it's requested.  No effect on the default
+# (laptop) install.
+[tool.uv.sources]
+hrtf_relearning = { path = "../hrtf_relearning", editable = true }

@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+hrtf_course/__init__.py
+hrtf_course/_dsp.py
+hrtf_course/analysis.py
+hrtf_course/conditions.py
+hrtf_course/manipulations.py
+hrtf_course/preview.py
+hrtf_course/study.py
+hrtf_course.egg-info/PKG-INFO
+hrtf_course.egg-info/SOURCES.txt
+hrtf_course.egg-info/dependency_links.txt
+hrtf_course.egg-info/requires.txt
+hrtf_course.egg-info/top_level.txt
