@@ -15,6 +15,9 @@ dependencies = [
     "matplotlib",
     "pandas",
     "slab",
+    # Needed by slab.HRTF.read_sofa() for reading SOFA files.
+    "h5py",
+    "h5netcdf",
     # hrtf_course vendors the small DSP / VSI / plot helpers it needs from
     # hrtf_relearning (see _dsp_primitives.py, vsi.py, _plot.py).  No hard
     # dep on the research package — students just `uv sync` and go.
