@@ -10,10 +10,13 @@ Requires-Dist: scipy
 Requires-Dist: matplotlib
 Requires-Dist: pandas
 Requires-Dist: slab
-Requires-Dist: hrtf_relearning
-Requires-Dist: scikit-learn
+Requires-Dist: h5py
+Requires-Dist: h5netcdf
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
+Provides-Extra: rig
+Requires-Dist: hrtf_relearning; extra == "rig"
+Requires-Dist: freefield; extra == "rig"
 
 # hrtf_course
 
@@ -57,32 +60,39 @@ with [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
 cd ~/projects/hrtf_course
-uv sync                                  # installs everything from uv.lock
-uv pip install -e ../hrtf_relearning     # editable sibling install
+uv sync           # default: laptop profile (cue editing + preview only)
 ```
 
-The two repos are expected to live as siblings:
+That's enough for everything in `scripts/02_*.py` and `scripts/03_*.py`
+(cue editing, preview, VSI).  No `hrtf_relearning` clone needed, no
+rig-only deps (Qt, PortAudio, MetaWear, pybinsim).
+
+### Rig install (Day 1 recording + Day 2/3 localization)
+
+The rig machine additionally needs `hrtf_relearning` for the recording
+pipeline and the localization runner.  Clone it as a sibling and sync
+the `rig` extra:
 
 ```
 ~/projects/
-├── hrtf_relearning/    # research code (unchanged by this package)
+├── hrtf_relearning/    # research code (rig only)
 └── hrtf_course/        # this repo
 ```
 
-If `pyqt5` / `portaudio` / `metawear` build steps fail on a laptop,
-those are rig-only deps — skip them with:
-
 ```bash
-uv sync --no-install-package pybinsim \
-        --no-install-package metawear \
-        --no-install-package pyqt5
-uv pip install -e ../hrtf_relearning --no-deps
+cd ~/projects/hrtf_course
+uv sync --extra rig
 ```
+
+You may need system packages first:
+
+* macOS: `brew install qt portaudio`
+* Linux: `apt install qt5-qmake portaudio19-dev`
 
 ### Trying it out without a recording
 
 Before you have your own HRTF, you can explore the manipulations on
-the KEMAR reference HRTF:
+the KEMAR reference HRTF — works on the default laptop install:
 
 ```python
 import slab

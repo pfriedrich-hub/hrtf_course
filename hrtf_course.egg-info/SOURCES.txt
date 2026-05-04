@@ -2,11 +2,16 @@ README.md
 pyproject.toml
 hrtf_course/__init__.py
 hrtf_course/_dsp.py
+hrtf_course/_dsp_primitives.py
+hrtf_course/_localization_metrics.py
+hrtf_course/_plot.py
+hrtf_course/_subject.py
 hrtf_course/analysis.py
 hrtf_course/conditions.py
 hrtf_course/manipulations.py
 hrtf_course/preview.py
 hrtf_course/study.py
+hrtf_course/vsi.py
 hrtf_course.egg-info/PKG-INFO
 hrtf_course.egg-info/SOURCES.txt
 hrtf_course.egg-info/dependency_links.txt

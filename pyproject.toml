@@ -25,18 +25,28 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
-# Extras for the rig machine: the research package provides Localization,
-# the Subject pickle loader, and the Baumgartner model.  Install with
-# `uv sync --extra rig` from a checkout that has hrtf_relearning as a
-# sibling, or `uv pip install -e ../hrtf_relearning`.
-rig = ["hrtf_relearning"]
+# Extras for the rig machine: the research package + freefield (TDT
+# DSP driver used during HRTF recording).  Install with
+# `uv sync --extra rig` from a checkout that has hrtf_relearning and
+# freefield as siblings.
+rig = ["hrtf_relearning", "freefield"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["hrtf_course*"]
 
-# Path source for the rig extra — uv resolves hrtf_relearning from the
-# sibling checkout when it's requested.  No effect on the default
+# Path sources for the rig extra — uv resolves these from sibling
+# checkouts when the extra is requested.  No effect on the default
 # (laptop) install.
 [tool.uv.sources]
 hrtf_relearning = { path = "../hrtf_relearning", editable = true }
+freefield = { path = "../freefield", editable = true }
+
+# metawear (the BLE head-tracker) brings in `warble`, a C extension
+# that doesn't build on macOS ("pywarble is not supported for Darwin").
+# Restrict it to Linux so `uv sync --extra rig` works on a Mac dev
+# machine; the actual rig runs Linux and still gets metawear.
+[tool.uv]
+override-dependencies = [
+    "metawear ; sys_platform == 'linux'",
+]
