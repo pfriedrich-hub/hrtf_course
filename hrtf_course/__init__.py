@@ -1,4 +1,4 @@
-"""hrtf_course — teaching layer over `hrtf_relearning`.
+"""hrtf_course — teaching layer for the practical psychoacoustics course.
 
 Public API
 ----------
@@ -14,9 +14,23 @@ Analysis + preview::
 
     from hrtf_course import collect_results, plot_compare, preview
 
-The teaching layer wraps existing primitives in ``hrtf_relearning`` —
-nothing in that package is modified.
+Data layout
+-----------
+``hrtf_course.PATH`` points at the repo root (one level above this
+package).  By default, SOFA files and Subject pickles live under
+``hrtf_course.PATH / "data" / {sofa,results}``.  To analyse rig data
+on a laptop, copy ``{subject}.sofa`` and ``{subject}.pkl`` into those
+folders.
+
+Override locations with the environment variables
+``HRTF_COURSE_SOFA_DIR`` and ``HRTF_COURSE_RESULTS_DIR`` if needed.
 """
+
+from pathlib import Path
+
+# Absolute path to the repo root — one level above this package.
+# Used as the anchor for the default data layout (data/sofa, data/results).
+PATH: Path = Path(__file__).resolve().parent.parent
 
 from hrtf_course.manipulations import (
     shift_band,
@@ -30,6 +44,7 @@ from hrtf_course.analysis import collect_results, plot_compare
 from hrtf_course import preview
 
 __all__ = [
+    "PATH",
     "shift_band",
     "widen_band",
     "octave_band",

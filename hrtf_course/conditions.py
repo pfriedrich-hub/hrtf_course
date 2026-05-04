@@ -45,20 +45,16 @@ def _default_sofa_dir() -> Path:
     Resolution order:
 
     1. ``HRTF_COURSE_SOFA_DIR`` environment variable (explicit override).
-    2. ``hrtf_relearning.PATH / "data" / "hrtf" / "sofa"`` if the research
-       package is installed (rig setup — keeps existing recordings
-       discoverable).
-    3. ``~/.hrtf_course/sofa`` (laptop setup — created on demand by
-       :meth:`Condition.build_sofa`).
+    2. ``<hrtf_course repo>/data/sofa`` — the project's own data tree.
+       To analyse rig data, copy ``{subject}.sofa`` files here from
+       ``hrtf_relearning/data/hrtf/sofa/``.
     """
     env = os.environ.get("HRTF_COURSE_SOFA_DIR")
     if env:
         return Path(env).expanduser()
-    try:
-        import hrtf_relearning  # type: ignore[import-not-found]
-        return hrtf_relearning.PATH / "data" / "hrtf" / "sofa"
-    except ImportError:
-        return Path.home() / ".hrtf_course" / "sofa"
+    # Lazy import to avoid a circular reference at package init time.
+    import hrtf_course
+    return hrtf_course.PATH / "data" / "sofa"
 
 
 SOFA_DIR: Path = _default_sofa_dir()

@@ -11,6 +11,9 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
+[manifest]
+overrides = [{ name = "metawear", marker = "sys_platform == 'linux'" }]
+
 [[package]]
 name = "beautifulsoup4"
 version = "4.14.3"
@@ -622,14 +625,11 @@ wheels = [
 [[package]]
 name = "freefield"
 version = "1.1.0"
-source = { editable = "../freefield" }
+source = { git = "https://github.com/pfriedrich-hub/freefield.git#9b096fe1a6e18ed92569bb14a9e4217ea2fdae87" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "numpy" }]
 
 [[package]]
 name = "fsspec"
@@ -741,10 +741,10 @@ rig = [
 
 [package.metadata]
 requires-dist = [
-    { name = "freefield", marker = "extra == 'rig'", editable = "../freefield" },
+    { name = "freefield", marker = "extra == 'rig'", git = "https://github.com/pfriedrich-hub/freefield.git" },
     { name = "h5netcdf" },
     { name = "h5py" },
-    { name = "hrtf-relearning", marker = "extra == 'rig'", editable = "../hrtf_relearning" },
+    { name = "hrtf-relearning", marker = "extra == 'rig'", git = "https://github.com/pfriedrich-hub/hrtf_relearning.git" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
@@ -757,29 +757,17 @@ provides-extras = ["dev", "rig"]
 [[package]]
 name = "hrtf-relearning"
 version = "0.1.0"
-source = { editable = "../hrtf_relearning" }
+source = { git = "https://github.com/pfriedrich-hub/hrtf_relearning.git#d9cab5af036f31aecd7e32dad5d9799f15f5ac29" }
 dependencies = [
     { name = "h5netcdf" },
     { name = "h5py" },
-    { name = "metawear" },
+    { name = "metawear", marker = "sys_platform == 'linux'" },
     { name = "pybinsim" },
     { name = "pyfar", version = "0.7.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pyfar", version = "0.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pynput" },
     { name = "pyqt5" },
     { name = "slab" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "h5netcdf" },
-    { name = "h5py" },
-    { name = "metawear" },
-    { name = "pybinsim", git = "https://github.com/pfriedrich-hub/pybinsim_tuil.git" },
-    { name = "pyfar" },
-    { name = "pynput" },
-    { name = "pyqt5" },
-    { name = "slab", git = "https://github.com/pfriedrich-hub/slab.git" },
 ]
 
 [[package]]
@@ -1101,9 +1089,9 @@ name = "metawear"
 version = "1.0.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyserial" },
-    { name = "requests" },
-    { name = "warble" },
+    { name = "pyserial", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "requests", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
+    { name = "warble", marker = "(python_full_version < '3.11' and sys_platform == 'emscripten') or (python_full_version < '3.11' and sys_platform == 'win32') or (sys_platform != 'emscripten' and sys_platform != 'win32')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/29/66/f4fcc732da51431ef875a99b872ad27070c72d88533a01fe94463fec19e0/metawear-1.0.8.tar.gz", hash = "sha256:80d108e8fe86b2535dd43cc5c0216775521f52f4933d8a2594676a919850e18f", size = 657966, upload-time = "2022-04-24T04:29:12.036Z" }
 

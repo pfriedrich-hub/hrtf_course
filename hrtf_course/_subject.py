@@ -1,7 +1,7 @@
 """Vendored ``Subject`` class for storing per-subject localization runs.
 
 Originally lived in ``hrtf_relearning.experiment.Subject``.  Inlined so
-the laptop profile can load and analyse rig-side pickles without needing
+``hrtf_course`` can load and analyse rig-side pickles without needing
 the full research package installed.
 
 The on-disk format is unchanged — pickles written by either copy of
@@ -9,9 +9,9 @@ The on-disk format is unchanged — pickles written by either copy of
 
 Results directory resolution (in order):
   1. ``HRTF_COURSE_RESULTS_DIR`` env var.
-  2. ``hrtf_relearning.PATH / "data" / "results"`` if hrtf_relearning is
-     installed (rig setup — keeps existing pickles discoverable).
-  3. ``~/.hrtf_course/results``.
+  2. ``<hrtf_course repo>/data/results`` — the project's own data tree.
+     Copy ``{subject}.pkl`` files here from
+     ``hrtf_relearning/data/results/`` to analyse rig data.
 """
 from __future__ import annotations
 
@@ -28,11 +28,8 @@ def _default_results_dir() -> Path:
     env = os.environ.get("HRTF_COURSE_RESULTS_DIR")
     if env:
         return Path(env).expanduser()
-    try:
-        import hrtf_relearning  # type: ignore[import-not-found]
-        return Path(hrtf_relearning.__file__).resolve().parent / "data" / "results"
-    except ImportError:
-        return Path.home() / ".hrtf_course" / "results"
+    import hrtf_course
+    return hrtf_course.PATH / "data" / "results"
 
 
 results_dir: Path = _default_results_dir()
