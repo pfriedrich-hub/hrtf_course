@@ -31,14 +31,15 @@ import numpy
 import pandas as pd
 import slab
 
-# VSI is vendored — works on the laptop profile without hrtf_relearning.
+# Vendored helpers — work on the laptop profile without hrtf_relearning.
 from hrtf_course.vsi import vsi_dissimilarity
 from hrtf_course.conditions import SOFA_DIR
+from hrtf_course._subject import Subject
+from hrtf_course._localization_metrics import localization_accuracy
 
-# Subject / localization_accuracy / Baumgartner model live in
-# hrtf_relearning and are only needed when reading rig data — lazy-imported
-# inside the functions that use them so this module is importable without
-# hrtf_relearning installed.
+# The Baumgartner 2014 model lives in hrtf_relearning and is the only
+# thing in this module that still requires the research package — it's
+# lazy-imported inside add_baumgartner_predictions().
 
 logger = logging.getLogger(__name__)
 
@@ -118,13 +119,6 @@ def collect_results(
         * ``az_sd``       — within-sector azimuth SD
         * ``vsi_diss``    — VSI dissimilarity vs. ``{base_subject}.sofa``
     """
-    # Lazy-import the rig-side helpers; this lets the laptop profile
-    # import this module even without hrtf_relearning installed.
-    from hrtf_relearning.experiment.Subject import Subject
-    from hrtf_relearning.experiment.analysis.localization.localization_analysis import (
-        localization_accuracy,
-    )
-
     rows: list[dict] = []
     requested = set(condition_names) if condition_names is not None else None
     # Cache VSI computations per (target, base) SOFA pair — they're expensive.
