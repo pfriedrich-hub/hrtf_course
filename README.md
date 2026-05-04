@@ -126,42 +126,55 @@ from hrtf_course import (
 
     # Conditions + study runner
     Condition,         # name + base subject + manipulation function
-    run_condition,     # build SOFA, run 5-min localization block
+    run_condition,     # build SOFA + run 5-min localization block (rig only)
 
-    # Analysis
+    # Analysis  (works on rig-data pickles copied into data/results/)
     collect_results,   # walk Subject pickles -> tidy DataFrame
     plot_compare,      # per-condition point clouds (one row per run)
-    plot_tolerance_curve,  # behavioural metric vs. VSI dissimilarity
 
     # Preview
     preview,           # spectrogram + VSI dissimilarity, no SOFA written
 )
 ```
 
-### One run, end to end
+### Designing a condition (laptop)
+
+Iterate on a manipulation against a recorded subject's SOFA — picking
+a band, previewing, and writing the manipulated SOFA out so you can
+take it to the rig:
 
 ```python
-from hrtf_course import Condition, shift_band, run_condition, octave_band
+from hrtf_course import Condition, shift_band, octave_band, preview
 
 low, high = octave_band(8000)
+
+# Assumes data/sofa/AGV.sofa exists (copy it in from the rig).
 cond = Condition(
     name="shift_8kHz_+10pct",
     base_subject="AGV",
     fn=lambda h: shift_band(h, low, high, factor=1.10),
 )
 
-# Sanity-check the manipulation
-from hrtf_course import preview
+# Visual sanity check — original vs. manipulated, with VSI dissimilarity
 preview.show(cond)
 
-# Run the localization block (~5 min, blocks until done)
-filename = run_condition("AGV", cond)
+# Write the manipulated SOFA to data/sofa/AGV_shift_8kHz_+10pct.sofa
+sofa_name = cond.build_sofa()
+print(sofa_name)
 ```
 
-### Pulling results across the whole class
+Carry the resulting SOFA over to the rig machine and run the
+localization block there — `run_condition` is wired up for rig use
+only, so it's invoked from the rig install, not the laptop.
+
+### Pooling results across the class
+
+After running localization blocks at the rig, copy each subject's
+``{id}.pkl`` pickle into ``data/results/`` here.  Then:
 
 ```python
-from hrtf_course import collect_results, plot_tolerance_curve
+from hrtf_course import collect_results
+from hrtf_course.analysis import plot_tolerance_curve
 
 df = collect_results(["AGV", "NKa", "VD"])
 plot_tolerance_curve(df, x="vsi_diss", y="ele_rmse")
