@@ -89,6 +89,30 @@ You may need system packages first:
 * macOS: `brew install qt portaudio`
 * Linux: `apt install qt5-qmake portaudio19-dev`
 
+### Bringing rig data over
+
+The course expects SOFA recordings and Subject pickles to live inside
+the course repo so the analysis path is self-contained:
+
+```
+hrtf_course/
+└── data/
+    ├── sofa/           # {subject}.sofa  + manipulated SOFAs
+    └── results/        # {subject}.pkl   (Subject pickle from rig runs)
+```
+
+After Day 1 (HRTF recording at the rig) and Days 2–3 (localization
+tests at the rig), copy the relevant files from the rig machine over:
+
+```bash
+# from hrtf_relearning's data tree → hrtf_course's data tree
+cp ~/projects/hrtf_relearning/data/hrtf/sofa/AGV.sofa  ~/projects/hrtf_course/data/sofa/
+cp ~/projects/hrtf_relearning/data/results/AGV.pkl    ~/projects/hrtf_course/data/results/
+```
+
+You can also override the locations entirely with the env vars
+`HRTF_COURSE_SOFA_DIR` and `HRTF_COURSE_RESULTS_DIR`.
+
 ### Trying it out without a recording
 
 Before you have your own HRTF, you can explore the manipulations on
