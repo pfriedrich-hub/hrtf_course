@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hrtf_course"
 version = "0.1.0"
-description = "Teaching layer over hrtf_relearning for the practical psychoacoustics course."
+description = "Cue editing and behavioural analysis for the practical psychoacoustics course."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Paul Friedrich" }]
@@ -18,37 +18,14 @@ dependencies = [
     # Needed by slab.HRTF.read_sofa() for reading SOFA files.
     "h5py",
     "h5netcdf",
-    # hrtf_course vendors the small DSP / VSI / plot helpers it needs from
-    # hrtf_relearning (see _dsp_primitives.py, vsi.py, _plot.py).  No hard
-    # dep on the research package — students just `uv sync` and go.
+    # The DSP / VSI / plot helpers used by this package are vendored —
+    # see hrtf_course/{_dsp_primitives.py, vsi.py, _plot.py}.  No
+    # dependency on hrtf_relearning; students just `uv sync` and go.
 ]
 
 [project.optional-dependencies]
 dev = ["pytest"]
-# Extras for the rig machine: the research package + freefield (TDT
-# DSP driver used during HRTF recording).  Install with
-# `uv sync --extra rig` from a checkout that has hrtf_relearning and
-# freefield as siblings.
-rig = ["hrtf_relearning", "freefield"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["hrtf_course*"]
-
-# Sources for the rig extra.  Default to git URLs so `uv sync --extra rig`
-# works on any machine without a sibling checkout.  When developing
-# locally, override with editable sibling installs after sync, e.g.:
-#     uv pip install -e ../hrtf_relearning --force-reinstall
-#     uv pip install -e ../freefield      --force-reinstall
-[tool.uv.sources]
-hrtf_relearning = { git = "https://github.com/pfriedrich-hub/hrtf_relearning.git" }
-freefield       = { git = "https://github.com/pfriedrich-hub/freefield.git" }
-
-# metawear (the BLE head-tracker) brings in `warble`, a C extension
-# that doesn't build on macOS ("pywarble is not supported for Darwin").
-# Restrict it to Linux so `uv sync --extra rig` works on a Mac dev
-# machine; the actual rig runs Linux and still gets metawear.
-[tool.uv]
-override-dependencies = [
-    "metawear ; sys_platform == 'linux'",
-]

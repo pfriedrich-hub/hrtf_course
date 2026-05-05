@@ -34,27 +34,28 @@ PATH: Path = Path(__file__).resolve().parent.parent
 
 from hrtf_course.manipulations import (
     shift_band,
-    widen_band,
     octave_band,
     erb_bandwidth,
 )
 from hrtf_course.conditions import Condition
-from hrtf_course.study import run_condition, default_hrir_settings, default_loc_settings
-from hrtf_course.analysis import collect_results, plot_compare
+from hrtf_course.analysis import (
+    list_runs,
+    collect_results,
+    plot_compare,
+    plot_tolerance_curve,
+)
 from hrtf_course import preview
 
 __all__ = [
     "PATH",
     "shift_band",
-    "widen_band",
     "octave_band",
     "erb_bandwidth",
     "Condition",
-    "run_condition",
-    "default_hrir_settings",
-    "default_loc_settings",
+    "list_runs",
     "collect_results",
     "plot_compare",
+    "plot_tolerance_curve",
     "preview",
 ]
 

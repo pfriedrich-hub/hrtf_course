@@ -1,24 +1,27 @@
 """Pool localization results across subjects and conditions.
 
-The flow is:
+Workflow assumed by this module:
 
-1.  :func:`collect_results` walks every ``Subject`` pickle for the requested
-    subject ids, finds every saved localization sequence, parses the
-    condition name out of the SOFA name embedded in the sequence, and
-    computes per-run summary stats (re-using
-    ``hrtf_relearning.localization_accuracy``) plus the Trapeau & Schönwiesner
-    (2016) VSI dissimilarity vs. the subject's own baseline HRTF.
+1.  Localization tests are run **at the rig** with ``hrtf_relearning``.
+    Each test stores its sequence on the ``Subject`` pickle, tagged with
+    the SOFA name of the HRTF used (``sequence.hrir``).  By convention
+    the SOFA name is ``{base_subject}_{condition}.sofa``, so the
+    condition is recoverable from the run.
 
-2.  :func:`plot_compare` plots a chosen metric (``ele_rmse``,
-    ``ele_gain``, ``ele_sd``, …) per condition with one point per run and
-    a mean overlay.
+2.  The Subject pickles (``{id}.pkl``) and the SOFA files
+    (``{id}.sofa`` and the manipulated variants) are **copied over to
+    this repo's** ``data/results/`` and ``data/sofa/`` folders for
+    analysis.
 
-3.  :func:`plot_tolerance_curve` plots a behavioural metric *against*
-    VSI dissimilarity — the headline "tolerance" plot for the seminar.
+3.  This module loads those pickles, lists the runs, lets you select
+    which runs to keep, and computes per-run summary statistics
+    (elevation/azimuth gain, RMSE, SD) plus VSI dissimilarity vs. the
+    subject's own baseline HRTF.
 
-4.  :func:`add_baumgartner_predictions` (opt-in) wraps the existing
-    Baumgartner 2014 model so a comparison column can be added to ``df``.
-    Currently a thin stub — see its docstring for the next step.
+Multiple runs per condition are normal — each run becomes its own row
+in the returned DataFrame.  Use :func:`list_runs` to inspect what's
+available, then filter ``collect_results`` by ``condition_names`` or
+``runs`` to select the ones you want to plot.
 """
 from __future__ import annotations
 
@@ -31,30 +34,33 @@ import numpy
 import pandas as pd
 import slab
 
-# Vendored helpers — work on the laptop profile without hrtf_relearning.
 from hrtf_course.vsi import vsi_dissimilarity
 from hrtf_course.conditions import SOFA_DIR
 from hrtf_course._subject import Subject
 from hrtf_course._localization_metrics import localization_accuracy
 
-# The Baumgartner 2014 model lives in hrtf_relearning and is the only
-# thing in this module that still requires the research package — it's
-# lazy-imported inside add_baumgartner_predictions().
-
 logger = logging.getLogger(__name__)
 
 
+__all__ = [
+    "list_runs",
+    "collect_results",
+    "plot_compare",
+    "plot_tolerance_curve",
+]
+
+
 # ---------------------------------------------------------------------------
-# Collection
+# Inspecting what's inside a Subject pickle
 # ---------------------------------------------------------------------------
 
 
 def _condition_from_sofa_name(sofa_name: str, base_subject: str) -> str:
     """Strip the ``{base_subject}_`` prefix off a SOFA name.
 
-    Sequences whose SOFA is exactly ``{base_subject}.sofa`` (i.e. the
-    untouched recorded HRTF) are returned as ``"recorded"`` so they appear
-    as their own condition in the DataFrame.
+    Sequences whose SOFA is exactly ``{base_subject}.sofa`` are returned
+    as ``"recorded"`` so the unmanipulated baseline shows up as its own
+    condition in the DataFrame.
     """
     prefix = f"{base_subject}_"
     if sofa_name == base_subject:
@@ -64,9 +70,54 @@ def _condition_from_sofa_name(sofa_name: str, base_subject: str) -> str:
     return sofa_name  # foreign HRTF (e.g. testing A on B) — keep as-is
 
 
+def list_runs(subject_id: str) -> pd.DataFrame:
+    """List every localization run on a Subject pickle.
+
+    Use this to see what's in a ``data/results/{id}.pkl`` before
+    deciding which runs to feed into :func:`collect_results`.
+
+    Parameters
+    ----------
+    subject_id : str
+        Subject id whose pickle to load (must be in ``data/results/``).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per saved localization sequence:
+
+        * ``run``        — sequence filename (timestamped, unique)
+        * ``base_hrtf``  — SOFA name embedded in the sequence
+        * ``condition``  — parsed from the SOFA name
+        * ``n_trials``   — number of completed trials
+    """
+    subj = Subject(subject_id)
+    rows = []
+    for run_name, sequence in (subj.localization or {}).items():
+        sofa_name = getattr(sequence, "hrir", None) or ""
+        base_subject = sofa_name.split("_")[0] if sofa_name else ""
+        cond = _condition_from_sofa_name(sofa_name, base_subject) if sofa_name else "?"
+        n_trials = len(getattr(sequence, "data", []) or [])
+        rows.append(dict(
+            run=run_name,
+            base_hrtf=sofa_name,
+            condition=cond,
+            n_trials=n_trials,
+        ))
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values(["condition", "run"]).reset_index(drop=True)
+    return df
+
+
+# ---------------------------------------------------------------------------
+# Collection
+# ---------------------------------------------------------------------------
+
+
 def _vsi_diss_safe(target_sofa: Path, baseline_sofa: Path,
                    bandwidth: tuple[float, float] = (5700, 11300)) -> float:
-    """Compute VSI dissimilarity, returning NaN if the input SOFA is missing."""
+    """VSI dissimilarity, NaN if either SOFA is missing or unreadable."""
     if not target_sofa.exists() or not baseline_sofa.exists():
         return float("nan")
     try:
@@ -83,6 +134,7 @@ def collect_results(
     subject_ids: Iterable[str],
     *,
     condition_names: Optional[Sequence[str]] = None,
+    runs: Optional[Sequence[str]] = None,
     vsi_bandwidth: tuple[float, float] = (5700, 11300),
 ) -> pd.DataFrame:
     """Pool localization runs across subjects into one DataFrame.
@@ -90,27 +142,28 @@ def collect_results(
     Parameters
     ----------
     subject_ids : iterable of str
-        Subjects whose pickles to load.  Each must have a recorded
-        ``{id}.sofa`` for VSI dissimilarity to be computed (skipped otherwise).
+        Subjects whose pickles to load from ``data/results/``.
     condition_names : sequence of str, optional
-        If given, restrict to these conditions (after the
-        ``{base_subject}_`` prefix is stripped).  ``None`` returns every
-        condition found.
+        Restrict to these conditions (after the ``{base_subject}_``
+        prefix is stripped).  ``None`` returns every condition found.
+    runs : sequence of str, optional
+        Restrict to these run filenames.  Use :func:`list_runs` to see
+        what's available; pass ``None`` to keep all.
     vsi_bandwidth : (low_hz, high_hz)
-        Frequency band for VSI computation.  Default 5700–11300 Hz, the peak
-        VSI band from Trapeau & Schönwiesner (2016).
+        Frequency band for VSI dissimilarity.  Default 5700–11300 Hz,
+        the peak VSI band from Trapeau & Schönwiesner (2016).
 
     Returns
     -------
     pandas.DataFrame
         Columns:
 
-        * ``subject``     — tester id (the human in the chair)
-        * ``base_hrtf``   — SOFA name written to disk (e.g. ``AGV_shift...``)
+        * ``subject``     — tester id
+        * ``base_hrtf``   — SOFA name written by the rig
         * ``base_subject``— subject id whose SOFA was manipulated
-        * ``condition``   — condition name (``"baseline"``, ``"shift_..."``)
-        * ``run``         — sequence filename (timestamped, unique)
-        * ``n_trials``    — number of completed trials in the sequence
+        * ``condition``   — condition name (e.g. ``"shift_+10pct"``)
+        * ``run``         — sequence filename (unique per run)
+        * ``n_trials``    — number of recorded trials
         * ``ele_gain``    — slope of response_el vs. target_el
         * ``ele_rmse``    — elevation RMSE in degrees
         * ``ele_sd``      — within-sector elevation SD
@@ -118,9 +171,11 @@ def collect_results(
         * ``az_rmse``     — azimuth RMSE in degrees
         * ``az_sd``       — within-sector azimuth SD
         * ``vsi_diss``    — VSI dissimilarity vs. ``{base_subject}.sofa``
+                            (NaN if either SOFA isn't in ``data/sofa/``)
     """
     rows: list[dict] = []
-    requested = set(condition_names) if condition_names is not None else None
+    keep_conds = set(condition_names) if condition_names is not None else None
+    keep_runs = set(runs) if runs is not None else None
     # Cache VSI computations per (target, base) SOFA pair — they're expensive.
     vsi_cache: dict[tuple[str, str], float] = {}
 
@@ -132,6 +187,9 @@ def collect_results(
             continue
 
         for run_name, sequence in (subj.localization or {}).items():
+            if keep_runs is not None and run_name not in keep_runs:
+                continue
+
             sofa_name = getattr(sequence, "hrir", None)
             if sofa_name is None:
                 logger.debug("Skipping %s — no .hrir on sequence", run_name)
@@ -139,7 +197,7 @@ def collect_results(
 
             base_subject = sofa_name.split("_")[0]
             cond = _condition_from_sofa_name(sofa_name, base_subject)
-            if requested is not None and cond not in requested:
+            if keep_conds is not None and cond not in keep_conds:
                 continue
 
             try:
@@ -148,8 +206,6 @@ def collect_results(
                 logger.exception("localization_accuracy failed for %s", run_name)
                 eg = e_rmse = e_sd = ag = a_rmse = a_sd = float("nan")
 
-            # n_trials: count of recorded trials, regardless of whether the
-            # sequence was completed (lets you compare partial runs too).
             n_trials = len(getattr(sequence, "data", []) or [])
 
             target_sofa = SOFA_DIR / f"{sofa_name}.sofa"
@@ -178,7 +234,6 @@ def collect_results(
 
     df = pd.DataFrame(rows)
     if not df.empty:
-        # Stable sort so plots come out in a sensible order
         df = df.sort_values(["subject", "condition", "run"]).reset_index(drop=True)
     return df
 
@@ -217,9 +272,10 @@ def plot_compare(
 ):
     """Per-group point cloud + group mean overlay for ``metric``.
 
-    Each subject contributes one dot per run; the mean across runs (and
-    subjects) is shown as a horizontal bar.  Useful for the seminar slide
-    that compares conditions at a glance.
+    One dot per run; horizontal bar = mean across runs (and subjects)
+    in that group.  Use ``group="condition"`` for the standard
+    condition-vs-condition view, ``group="subject"`` for a per-subject
+    view, etc.
     """
     _check_metric(metric)
     if df.empty:
@@ -236,7 +292,6 @@ def plot_compare(
     rng = numpy.random.default_rng(0)
     for x_idx, gname in enumerate(groups):
         sub = df[df[group] == gname][metric].astype(float)
-        # Light horizontal jitter to separate overlapping runs
         x_jit = rng.uniform(-0.12, 0.12, size=len(sub)) + x_idx
         axis.scatter(x_jit, sub, alpha=0.7)
         if len(sub):
@@ -268,10 +323,10 @@ def plot_tolerance_curve(
     filepath: Optional[Path] = None,
     color_by_subject: bool = True,
 ):
-    """Headline plot — behavioural metric vs. VSI dissimilarity.
+    """Behavioural metric vs. VSI dissimilarity — the tolerance plot.
 
-    Each point is one localization run.  By default, runs from the same
-    subject share a colour, so you can read off whether a condition is
+    Each point is one localization run.  By default, runs from the
+    same subject share a colour, so you can see whether a condition is
     consistently harder or just noisy.
     """
     _check_metric(x)
@@ -291,8 +346,6 @@ def plot_tolerance_curve(
     else:
         axis.scatter(df[x], df[y], alpha=0.8)
 
-    # Optional condition labels next to each dot (small, ~6pt) so the plot
-    # is self-documenting in seminar slides.
     if "condition" in df.columns:
         for _, row in df.iterrows():
             try:
@@ -314,117 +367,3 @@ def plot_tolerance_curve(
         Path(filepath).parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(filepath, dpi=150)
     return fig
-
-
-# ---------------------------------------------------------------------------
-# Optional model comparison
-# ---------------------------------------------------------------------------
-
-
-def add_baumgartner_predictions(
-    df: pd.DataFrame,
-    *,
-    sig_path: Optional[Path] = None,
-    do_dtf: bool = False,
-    column: str = "model_pe",
-) -> pd.DataFrame:
-    """Add a Baumgartner-2014 polar-error column to ``df`` (opt-in).
-
-    For each row, run
-    ``hrtf_relearning.hrtf.models.baumgartner2014.baumgartner2014`` with
-    the manipulated SOFA as the *target* and the subject's baseline SOFA
-    as the *template*.  The returned polar error is added as ``column``.
-
-    .. note::
-
-       This is intentionally a thin wrapper.  The Baumgartner module's
-       current entry point in this repo expects positional path arguments
-       and saves figures to disk; it returns a dictionary of results that
-       includes a polar-error scalar.  The exact extraction may need
-       adjusting as the model module evolves — the implementation below
-       guards against that and returns NaN if it cannot find a scalar.
-
-    Parameters
-    ----------
-    df : DataFrame
-        Output of :func:`collect_results`.
-    sig_path : Path, optional
-        Stimulus WAV used by the model.  If None, a built-in pink-noise
-        stimulus from ``hrtf_relearning/data/sounds`` is used.
-    do_dtf : bool
-        Whether the model should diffuse-field-equalize.  See the model
-        docstring.
-    column : str
-        Name of the new column.
-
-    Returns
-    -------
-    DataFrame
-        Same as input, with one extra column.
-    """
-    try:
-        import hrtf_relearning  # type: ignore[import-not-found]
-        from hrtf_relearning.hrtf.models.baumgartner2014 import baumgartner2014
-    except Exception:
-        logger.exception("Could not import baumgartner2014 model.")
-        df = df.copy()
-        df[column] = float("nan")
-        return df
-
-    if sig_path is None:
-        candidate = (
-            hrtf_relearning.PATH / "data" / "sounds" / "1s_pinknoise_44100.wav"
-        )
-        sig_path = candidate if candidate.exists() else None
-
-    df = df.copy()
-    preds: list[float] = []
-    for _, row in df.iterrows():
-        target = SOFA_DIR / f"{row['base_hrtf']}.sofa"
-        template = SOFA_DIR / f"{row['base_subject']}.sofa"
-        if not target.exists() or not template.exists():
-            preds.append(float("nan"))
-            continue
-        try:
-            result = baumgartner2014(
-                target, template, sig_path,
-                shutup=True, do_dtf=do_dtf,
-                fig_savepath=None, is_save=False,
-            )
-        except TypeError:
-            # Older signatures expect different positional args — give up
-            # gracefully and let the user wire it in by hand.
-            logger.warning(
-                "baumgartner2014 signature mismatch.  Fill in this wrapper "
-                "for your installed version of hrtf_relearning."
-            )
-            preds.append(float("nan"))
-            continue
-        except Exception:
-            logger.exception("baumgartner2014 failed for %s", row["base_hrtf"])
-            preds.append(float("nan"))
-            continue
-
-        # Try to pull a scalar polar-error metric out of whatever the model
-        # returned.  Adjust as needed for your concrete model output shape.
-        scalar = _extract_polar_error(result)
-        preds.append(scalar)
-
-    df[column] = preds
-    return df
-
-
-def _extract_polar_error(result):
-    """Best-effort scalar extraction from the Baumgartner model output."""
-    if result is None:
-        return float("nan")
-    if isinstance(result, (int, float, numpy.floating)):
-        return float(result)
-    if isinstance(result, dict):
-        for key in ("polar_error", "pe", "PE", "rmse_polar"):
-            if key in result:
-                try:
-                    return float(numpy.asarray(result[key]).squeeze())
-                except Exception:
-                    pass
-    return float("nan")

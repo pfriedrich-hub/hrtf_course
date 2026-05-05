@@ -5,31 +5,23 @@ input is never modified.  They are pure (no I/O), so students can chain
 them, plot intermediate results, and explore freely without polluting the
 SOFA directory.
 
-Two manipulations are implemented, sharing a common cepstral split
-(broad envelope vs. fine peaks/notches), so they form a clean
-position-vs-shape contrast:
+Currently implemented:
 
-* :func:`shift_band`  — extract the high-quefrency detail (sharp peaks
-  and notches) from the cepstrum, warp **only that detail** by
-  ``factor`` in log-frequency inside the band, and recombine with the
-  unshifted envelope.  Day 2: tolerance for *cue frequency* (elevation
-  cues move; broad envelope / externalisation cues stay put).
-* :func:`widen_band`  — keep each peak/notch at its original centre
-  frequency and dB depth, but widen it in log-frequency.  Day 3:
-  tolerance for *cue shape* (sharpness changes, position+depth
-  preserved).
+* :func:`shift_band` — extract the high-quefrency detail (sharp peaks
+  and notches) from the cepstrum, warp **only that detail** in
+  log-frequency inside a chosen band by a multiplicative ``factor``,
+  and recombine with the unshifted envelope.  Tests tolerance for
+  *cue frequency* (elevation cues move; broad envelope /
+  externalisation cues stay put).
 
-Both follow the same window-blend pattern (see :mod:`hrtf_course._dsp`).
-
-Helper utilities :func:`octave_band` and :func:`erb_bandwidth` make it easy
-to choose sensible band edges from a single centre frequency.
+Helper utilities :func:`octave_band` and :func:`erb_bandwidth` make it
+easy to choose sensible band edges from a single centre frequency.
 """
 from __future__ import annotations
 
 from typing import Tuple
 
 import numpy
-import scipy.signal
 
 from hrtf_course._dsp import (
     band_window,
@@ -40,7 +32,6 @@ from hrtf_course._dsp import (
 
 __all__ = [
     "shift_band",
-    "widen_band",
     "octave_band",
     "erb_bandwidth",
 ]
@@ -182,143 +173,3 @@ def shift_band(
     )
 
 
-# ---------------------------------------------------------------------------
-# Day 3 — peak/notch widening at preserved centre + depth
-# ---------------------------------------------------------------------------
-
-
-def widen_band(
-    hrtf,
-    low_hz: float,
-    high_hz: float,
-    width_octaves: float = 0.10,
-    *,
-    baseline_n_keep: int = 3,
-    prominence_db: float = 1.0,
-    skirt_octaves: float = 0.25,
-    onset_threshold_db: float = 15.0,
-):
-    """Widen peaks/notches inside ``[low_hz, high_hz]`` while keeping their
-    centre frequency and dB depth fixed.
-
-    The motivation is a clean dissociation from :func:`shift_band`: shifting
-    moves features in frequency without changing their shape; widening
-    changes only their *sharpness* (Q) without changing position or depth.
-    The two together let students ask "which spectral attribute matters
-    more for vertical localisation — where the cue sits, or how sharp it
-    is?".
-
-    Algorithm (per ear, per source):
-
-    1.  Compute a smooth envelope ``baseline`` via cepstral truncation
-        (``n_keep=baseline_n_keep`` — heavy smoothing).
-    2.  ``detail = log_mag - baseline_db`` is the signed dB deviation of
-        each frequency bin from the envelope.
-    3.  Inside the band, find local extrema in ``detail`` (peaks *and*
-        notches) above ``prominence_db``.
-    4.  Reconstruct ``new_detail`` as the sum of Gaussian features in
-        log-frequency: each feature centred on its original peak/notch
-        frequency, with the original signed dB depth as amplitude, and
-        sigma = ``width_octaves`` (in octaves).
-    5.  ``new_log_mag = baseline_db + new_detail``, blended into the
-        original spectrum inside the band window.
-
-    Because each feature's amplitude is the original signed dB and its
-    centre is the original peak/notch frequency, depth and position are
-    preserved by construction.  Only ``width_octaves`` controls the shape.
-
-    Parameters
-    ----------
-    hrtf : slab.HRTF
-    low_hz, high_hz : float
-        Band edges (Hz).
-    width_octaves : float
-        Sigma of the Gaussian features in octaves.  Useful range ~0.02-0.4:
-
-        * ``0.03`` → near-original (very sharp features)
-        * ``0.10`` → moderately widened
-        * ``0.30`` → heavily widened (shape almost lost while
-          centre+depth survive)
-    baseline_n_keep : int
-        Cepstral coefficients retained for the envelope.  Default 3
-        (heavy smoothing — keeps only the broad spectral slope).
-    prominence_db : float
-        Minimum prominence (in dB) for a local extremum to be treated as
-        a peak/notch.  Below this, the deviation is considered ripple and
-        is not reinjected.
-    skirt_octaves : float
-        Cosine taper outside the band, in octaves (default 0.25).
-    onset_threshold_db : float
-        Threshold for ITD restoration.
-
-    Returns
-    -------
-    slab.HRTF
-    """
-    if width_octaves <= 0:
-        raise ValueError(f"width_octaves must be positive, got {width_octaves}")
-    if baseline_n_keep < 1:
-        raise ValueError(f"baseline_n_keep must be >= 1, got {baseline_n_keep}")
-    if prominence_db < 0:
-        raise ValueError(f"prominence_db must be >= 0, got {prominence_db}")
-
-    def _process(mag_in: numpy.ndarray, freqs: numpy.ndarray, az: float, el: float):
-        n_bins, n_ch = mag_in.shape
-        eps = numpy.finfo(float).tiny
-
-        log_mag = 20.0 * numpy.log10(numpy.maximum(mag_in, eps))
-
-        # 1. smooth envelope
-        baseline_mag = _cepstral_smooth(mag_in, n_keep=int(baseline_n_keep))
-        baseline_db = 20.0 * numpy.log10(numpy.maximum(baseline_mag, eps))
-
-        # 2. signed dB deviation
-        detail = log_mag - baseline_db
-
-        # restrict feature picking to the in-band region
-        in_band = (freqs >= low_hz) & (freqs <= high_hz)
-        idx_band = numpy.where(in_band)[0]
-
-        new_log_mag = baseline_db.copy()
-
-        # The band window is also used to taper the Gaussian bumps so they
-        # never contribute energy outside the band — without this, the
-        # Gaussian tails leak across the band edge and corrupt the
-        # out-of-band spectrum after the magnitude blend.
-        w = band_window(freqs, low_hz, high_hz, skirt_octaves=skirt_octaves)
-
-        if idx_band.size >= 5:
-            log_freqs = numpy.log2(numpy.maximum(freqs, 1.0))
-            inv_2sigma2 = 1.0 / (2.0 * width_octaves * width_octaves)
-
-            for ch in range(n_ch):
-                d_band = detail[idx_band, ch]
-
-                # peaks (positive deviations)
-                pk_idx, _ = scipy.signal.find_peaks(d_band, prominence=prominence_db)
-                # notches (negative deviations)
-                nt_idx, _ = scipy.signal.find_peaks(-d_band, prominence=prominence_db)
-                feat_idx = numpy.concatenate([pk_idx, nt_idx]).astype(int)
-
-                if feat_idx.size == 0:
-                    continue
-
-                bump_sum = numpy.zeros(n_bins, dtype=float)
-                for i in feat_idx:
-                    f_c = freqs[idx_band[i]]
-                    A = float(d_band[i])  # signed depth in dB
-                    delta = log_freqs - numpy.log2(f_c)
-                    bump_sum += A * numpy.exp(-(delta * delta) * inv_2sigma2)
-
-                # taper bumps with the band window so they vanish outside
-                new_log_mag[:, ch] = baseline_db[:, ch] + w * bump_sum
-
-        new_mag = 10.0 ** (new_log_mag / 20.0)
-
-        # blend in-band only — outside the skirt, w=0 ⇒ mag_out = mag_in
-        mag_out = (1.0 - w[:, None]) * mag_in + w[:, None] * new_mag
-        return mag_out
-
-    return apply_per_source(
-        hrtf, _process, onset_threshold_db=onset_threshold_db
-    )
