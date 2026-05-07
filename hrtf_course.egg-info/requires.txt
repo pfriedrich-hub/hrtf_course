@@ -5,6 +5,7 @@ pandas
 slab
 h5py
 h5netcdf
+netcdf4
 
 [dev]
 pytest

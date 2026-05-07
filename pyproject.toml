@@ -21,6 +21,7 @@ dependencies = [
     # The DSP / VSI / plot helpers used by this package are vendored —
     # see hrtf_course/{_dsp_primitives.py, vsi.py, _plot.py}.  No
     # dependency on hrtf_relearning; students just `uv sync` and go.
+    "netcdf4"
 ]
 
 [project.optional-dependencies]

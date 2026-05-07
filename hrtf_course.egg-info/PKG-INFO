@@ -12,6 +12,7 @@ Requires-Dist: pandas
 Requires-Dist: slab
 Requires-Dist: h5py
 Requires-Dist: h5netcdf
+Requires-Dist: netcdf4
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 

@@ -11,27 +11,32 @@
 # the recording from the rig before starting.
 
 # %% --- 1. Settings ---------------------------------------------------------
-SUBJECT_ID = "AGV"   # base SOFA file: data/sofa/AGV.sofa
+SUBJECT_ID = "IM"   # base SOFA file: data/sofa/AGV.sofa
 
 from hrtf_course import octave_band
 
 # 1-octave band centred on 8 kHz — adjust to where your subject's
 # prominent peaks/notches actually sit (use plot_spectrogram below).
-BAND_LOW, BAND_HIGH = octave_band(8000.0)
-
+# BAND_LOW, BAND_HIGH = octave_band(8000.0)
+BAND_LOW, BAND_HIGH =5.7e3, 13e3
 # Shift factors to test — keep the list short, ~5 min per condition at
 # the rig.
 SHIFT_FACTORS = {
+    "shift_-30pct": 0.70,
+    "shift_-20pct": 0.80,
     "shift_-10pct": 0.90,   # cues 10 % lower
     "shift_+10pct": 1.10,   # cues 10 % higher
     "shift_+20pct": 1.20,
+    "shift_+30pct": 1.30,
+
 }
 
 # %% --- 2. Look at the recorded HRTF ---------------------------------------
 import slab
+from pathlib import Path
 import matplotlib.pyplot as plt
-from hrtf_course import preview, PATH
-
+from hrtf_course import preview
+PATH = Path.cwd()
 sofa_path = PATH / "data" / "sofa" / f"{SUBJECT_ID}.sofa"
 hrtf = slab.HRTF(sofa_path)
 
