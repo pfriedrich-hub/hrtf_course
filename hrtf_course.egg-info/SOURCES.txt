@@ -10,7 +10,6 @@ hrtf_course/analysis.py
 hrtf_course/conditions.py
 hrtf_course/manipulations.py
 hrtf_course/preview.py
-hrtf_course/study.py
 hrtf_course/vsi.py
 hrtf_course.egg-info/PKG-INFO
 hrtf_course.egg-info/SOURCES.txt

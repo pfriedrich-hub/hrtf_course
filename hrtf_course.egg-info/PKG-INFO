@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: hrtf_course
 Version: 0.1.0
-Summary: Teaching layer over hrtf_relearning for the practical psychoacoustics course.
+Summary: Cue editing and behavioural analysis for the practical psychoacoustics course.
 Author: Paul Friedrich
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
@@ -14,36 +14,25 @@ Requires-Dist: h5py
 Requires-Dist: h5netcdf
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
-Provides-Extra: rig
-Requires-Dist: hrtf_relearning; extra == "rig"
-Requires-Dist: freefield; extra == "rig"
 
 # hrtf_course
 
-Teaching layer over [`hrtf_relearning`](https://github.com/pfriedrich-hub/hrtf_relearning) for the practical psychoacoustics course.
+Cue editing and behavioural analysis for the practical psychoacoustics
+course.  Used to:
 
-The course runs over three days:
+* design **cue-frequency-shift** conditions (manipulate a recorded
+  HRTF in a chosen band, write a new SOFA), and
+* analyse **localization-test results** that come back from the rig
+  as ``Subject`` pickles, grouped by condition.
 
-| Day | What students do                                                              | Script                          |
-|----:|-------------------------------------------------------------------------------|---------------------------------|
-| 1   | Record each other's HRTFs on the dome                                         | `scripts/01_record_hrtf.py`     |
-| 2   | Test tolerance for **cue frequency** (band-shift)                             | `scripts/02_experiment1_freq_shift.py` |
-| 3   | Test tolerance for **cue shape** (peak/notch widening, fixed centre+depth)    | `scripts/03_experiment2_widen.py`  |
-| —   | Pool results, prepare seminar plots                                           | `scripts/04_analyze_pooled.py`  |
-
-The two experimental days are designed as a clean **position vs. shape** contrast:
-
-| Day | manipulation     | what changes                  | what is preserved               |
-|----:|------------------|-------------------------------|---------------------------------|
-| 2   | `shift_band`     | centre frequency of cues      | shape (sharpness) + dB depth    |
-| 3   | `widen_band`     | sharpness (Q) of each feature | centre frequency + dB depth     |
-
-The `hrtf_course` package wraps existing functionality in `hrtf_relearning` — no research code is modified.
+HRTF recording and the localization tests themselves run on the rig
+machine via [`hrtf_relearning`](https://github.com/pfriedrich-hub/hrtf_relearning)
+— this repo only covers the laptop-side cue editing and post-hoc
+analysis.
 
 ## Install
 
-The project ships with a populated `.venv/` containing all
-dependencies.  The student workflow is just:
+The project ships with a populated `.venv/` containing all dependencies.
 
 1. Open the `hrtf_course/` folder in PyCharm.
 2. PyCharm auto-detects `.venv/` as the project interpreter (if it
@@ -51,160 +40,148 @@ dependencies.  The student workflow is just:
    Settings → Project → Python Interpreter → Add → Existing).
 3. Open a script in `scripts/` and run the `# %%` cells.
 
-That's it.
-
-### Re-creating `.venv/` (one-time provisioning)
-
-If the venv is missing or broken — e.g. on a fresh clone — recreate it
-with [`uv`](https://docs.astral.sh/uv/):
+If `.venv/` is missing or broken (fresh clone, deleted, etc.),
+re-create it with [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
 cd ~/projects/hrtf_course
-uv sync           # default: laptop profile (cue editing + preview only)
+uv sync
 ```
 
-That's enough for everything in `scripts/02_*.py` and `scripts/03_*.py`
-(cue editing, preview, VSI).  No `hrtf_relearning` clone needed, no
-rig-only deps (Qt, PortAudio, MetaWear, pybinsim).
-
-### Rig install (Day 1 recording + Day 2/3 localization)
-
-The rig machine additionally needs `hrtf_relearning` for the recording
-pipeline and the localization runner.  Clone it as a sibling and sync
-the `rig` extra:
+## Workflow
 
 ```
-~/projects/
-├── hrtf_relearning/    # research code (rig only)
-└── hrtf_course/        # this repo
+                cue editing                    localization tests
+   ┌──────────────────────────────┐        ┌─────────────────────┐
+   │   hrtf_course (this repo)    │  SOFA  │    rig machine      │
+   │  scripts/01_design_*.py      │ ────► │   hrtf_relearning   │
+   │                              │        │                     │
+   │  scripts/02_analyze.py       │ ◄──── │                     │
+   └──────────────────────────────┘  pkl   └─────────────────────┘
 ```
 
-```bash
-cd ~/projects/hrtf_course
-uv sync --extra rig
-```
+### Data layout
 
-You may need system packages first:
-
-* macOS: `brew install qt portaudio`
-* Linux: `apt install qt5-qmake portaudio19-dev`
-
-### Bringing rig data over
-
-The course expects SOFA recordings and Subject pickles to live inside
-the course repo so the analysis path is self-contained:
+This repo is the single source of truth for data on the laptop side.
+Subject pickles and SOFAs live under ``data/``:
 
 ```
 hrtf_course/
 └── data/
-    ├── sofa/           # {subject}.sofa  + manipulated SOFAs
+    ├── sofa/           # {subject}.sofa  (recorded) + manipulated SOFAs
     └── results/        # {subject}.pkl   (Subject pickle from rig runs)
 ```
 
-After Day 1 (HRTF recording at the rig) and Days 2–3 (localization
-tests at the rig), copy the relevant files from the rig machine over:
+Copy files in/out of those folders to move data between this repo and
+the rig:
 
 ```bash
-# from hrtf_relearning's data tree → hrtf_course's data tree
-cp ~/projects/hrtf_relearning/data/hrtf/sofa/AGV.sofa  ~/projects/hrtf_course/data/sofa/
-cp ~/projects/hrtf_relearning/data/results/AGV.pkl    ~/projects/hrtf_course/data/results/
+# Bring a recording over from the rig before designing conditions
+cp /path/to/rig/data/hrtf/sofa/AGV.sofa  ~/projects/hrtf_course/data/sofa/
+
+# After running localization tests at the rig, bring the pickle back
+cp /path/to/rig/data/results/AGV.pkl    ~/projects/hrtf_course/data/results/
+
+# And take a manipulated SOFA you designed here back to the rig
+cp ~/projects/hrtf_course/data/sofa/AGV_shift_+10pct.sofa  /path/to/rig/data/hrtf/sofa/
 ```
 
-You can also override the locations entirely with the env vars
-`HRTF_COURSE_SOFA_DIR` and `HRTF_COURSE_RESULTS_DIR`.
-
-### Trying it out without a recording
-
-Before you have your own HRTF, you can explore the manipulations on
-the KEMAR reference HRTF — works on the default laptop install:
-
-```python
-import slab
-from hrtf_course import shift_band, widen_band, octave_band, preview
-
-hrtf = slab.HRTF.kemar()
-low, high = octave_band(8000)
-
-shifted = shift_band(hrtf, low, high, factor=1.10)
-widened = widen_band(hrtf, low, high, width_octaves=0.20)
-
-# Quick visual sanity check
-preview.plot_spectrogram(hrtf, bands=[(low, high)])
-```
+You can override the locations entirely with the env vars
+``HRTF_COURSE_SOFA_DIR`` and ``HRTF_COURSE_RESULTS_DIR``.
 
 ## What the package gives you
 
 ```python
 from hrtf_course import (
-    # Manipulations (return new slab.HRTF — input not modified)
-    shift_band,        # cepstral split: warp ONLY the high-quefrency
-                       #   detail (sharp peaks/notches) inside [low, high];
-                       #   broad envelope (externalisation) untouched
-    widen_band,        # widen peaks/notches inside [low, high]
-                       #   (centre freq + dB depth preserved)
-    octave_band,       # convenience: octave_band(8000) -> (5657, 11314) Hz
-
-    # Conditions + study runner
-    Condition,         # name + base subject + manipulation function
-    run_condition,     # build SOFA, run 5-min localization block
-
-    # Analysis
-    collect_results,   # walk Subject pickles -> tidy DataFrame
-    plot_compare,      # per-condition point clouds (one row per run)
-    plot_tolerance_curve,  # behavioural metric vs. VSI dissimilarity
+    # Cue editing
+    shift_band,            # cepstral split: warp ONLY the high-quefrency
+                           #   detail inside [low, high]; broad envelope
+                           #   (externalisation) is preserved
+    octave_band,           # octave_band(8000) -> (5657, 11314) Hz
+    Condition,             # name + base subject + manipulation function
 
     # Preview
-    preview,           # spectrogram + VSI dissimilarity, no SOFA written
+    preview,               # spectrogram + VSI dissimilarity, no I/O
+
+    # Analysis (post-rig)
+    list_runs,             # peek at all runs in a Subject pickle
+    collect_results,       # pool runs into a tidy DataFrame
+    plot_compare,          # metric per condition, one dot per run
+    plot_tolerance_curve,  # metric vs. VSI dissimilarity
 )
 ```
 
-### One run, end to end
+## Minimal example — design + preview a condition
+
+Assumes ``data/sofa/AGV.sofa`` is in place (copy it in from the rig
+first):
 
 ```python
-from hrtf_course import Condition, shift_band, run_condition, octave_band
+from hrtf_course import Condition, shift_band, octave_band, preview
 
 low, high = octave_band(8000)
+
 cond = Condition(
-    name="shift_8kHz_+10pct",
+    name="shift_+10pct",
     base_subject="AGV",
     fn=lambda h: shift_band(h, low, high, factor=1.10),
 )
 
-# Sanity-check the manipulation
-from hrtf_course import preview
-preview.show(cond)
-
-# Run the localization block (~5 min, blocks until done)
-filename = run_condition("AGV", cond)
+preview.show(cond)            # original vs. manipulated, with VSI
+sofa_name = cond.build_sofa() # writes data/sofa/AGV_shift_+10pct.sofa
+print(sofa_name)
 ```
 
-### Pulling results across the whole class
+The full design script lives at ``scripts/01_design_conditions.py`` —
+it builds a few shift conditions in one go and writes them all out.
+
+## Minimal example — analyse a Subject pickle
+
+After the rig sends back ``data/results/AGV.pkl``:
 
 ```python
-from hrtf_course import collect_results, plot_tolerance_curve
+from hrtf_course import list_runs, collect_results, plot_compare, plot_tolerance_curve
+import matplotlib.pyplot as plt
 
-df = collect_results(["AGV", "NKa", "VD"])
+# 1. See what's in the pickle
+print(list_runs("AGV"))
+
+# 2. Pool the runs you care about (multiple runs per condition is fine)
+df = collect_results(
+    ["AGV"],
+    condition_names=["recorded", "shift_-10pct", "shift_+10pct", "shift_+20pct"],
+)
+print(df[["subject", "condition", "run", "ele_rmse", "vsi_diss"]])
+
+# 3. Plot
+plot_compare(df, metric="ele_rmse", group="condition")
 plot_tolerance_curve(df, x="vsi_diss", y="ele_rmse")
+plt.show()
 ```
 
-## How condition tagging works
+If a condition was run multiple times, each run shows up as a separate
+dot in the plots.  To restrict to specific runs (e.g. drop a partial
+sequence), pass ``runs=[...]`` to ``collect_results``.
 
-When `Condition.build_sofa()` is called, the manipulated HRTF is written to:
+The full analysis script lives at ``scripts/02_analyze.py``.
 
-```
-hrtf_relearning/data/hrtf/sofa/{base_subject}_{condition.name}.sofa
-```
+## How conditions are recovered from rig data
 
-`run_condition` passes that name into `hrtf_relearning`'s `Localization` machinery as `hrir_settings["name"]`, which means the saved sequence ends up tagged with the condition automatically. `collect_results` parses the condition back out by stripping the `{base_subject}_` prefix.
+When the rig runs a localization test, it stores the SOFA name on the
+sequence (``sequence.hrir``).  By convention the SOFA name is
+``{base_subject}_{condition}.sofa`` — e.g. ``AGV_shift_+10pct.sofa`` —
+so ``collect_results`` parses the condition back out by stripping the
+``{base_subject}_`` prefix.  Sequences whose SOFA is exactly
+``{base_subject}.sofa`` are reported as condition ``"recorded"``.
 
-This is why **condition names must be filename-safe**: only `A–Z`, `a–z`, `0–9`, `_`, `+`, `-`, and `.` are allowed.
+Condition names therefore have to be filename-safe: only
+``A–Z``, ``a–z``, ``0–9``, ``_``, ``+``, ``-``, and ``.`` are allowed.
 
-## VSI and the Baumgartner 2014 model
+## VSI dissimilarity
 
-`collect_results` automatically computes [Trapeau & Schönwiesner (2016)](https://doi.org/10.1121/1.4960400) VSI dissimilarity vs. each subject's baseline HRTF, in the 5.7–11.3 kHz peak band. This gives a single scalar per condition that quantifies *how much the spectral cues changed*. `plot_tolerance_curve` plots a behavioural metric against it — the headline figure for the seminar.
-
-`add_baumgartner_predictions(df)` is an opt-in extension that wraps the existing Baumgartner 2014 model in `hrtf_relearning/hrtf/models/` and adds a `model_pe` column. It's a thin stub today — see the docstring for what to fill in.
-
-## Time budget for the course
-
-About 2 h per session, 5 min per localization block, 2–3 students. The example scripts are sized to **4 conditions per student per day** (1 baseline + 3 manipulation levels). At 5 min each plus repositioning, that's ~25 min per student, leaving time for setup, instructions, and one or two repeat blocks if something goes wrong.
+``collect_results`` automatically computes
+[Trapeau & Schönwiesner (2016)](https://doi.org/10.1121/1.4960400)
+VSI dissimilarity vs. each subject's baseline HRTF, in the 5.7–11.3 kHz
+peak band — a single scalar per run that quantifies how much the
+spectral cues changed.  ``plot_tolerance_curve`` plots a behavioural
+metric against it — the headline figure for the seminar.
